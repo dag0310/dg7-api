@@ -2,6 +2,7 @@ const express = require('express')
 var cors = require('cors')
 const dgram = require('dgram')
 const net = require('net')
+const sunriseSunsetJs = require('sunrise-sunset-js')
 const app = express()
 const port = 3000
 
@@ -53,7 +54,7 @@ function checkQueryParams (query, queryParams, res) {
   return true
 }
 
-app.post('/udp', (req, res) => {
+const udpRequest = (req, res) => {
   if (!checkQueryParams(req.query, ['command'], res)) {
     return
   }
@@ -69,7 +70,8 @@ app.post('/udp', (req, res) => {
       res.send()
     })
   })
-})
+}
+app.post('/udp', udpRequest)
 
 app.post('/tcp', (req, res) => {
   if (!checkQueryParams(req.query, ['command', 'host', 'port'], res)) {
@@ -96,6 +98,32 @@ app.post('/tcp', (req, res) => {
   // tcpSocket.on('close', () => {
   // console.log('Connection closed')
   // })
+})
+
+app.post('/sunrise_sunset_event', (req, res) => {
+  for (const key of ['interval', 'type', 'lat', 'lon', 'command']) {
+    if (!Object.keys(req.query).includes(key)) {
+      res.send({ message: `Missing query param '${key}'` })
+      return
+    }
+  }
+  const minutesInterval = parseInt(req.query.interval, 10)
+  const lat = parseFloat(req.query.lat)
+  const lon = parseFloat(req.query.lon)
+  const now = new Date()
+  let eventTime;
+  switch (req.query.type) {
+    case 'sunrise': eventTime = sunriseSunsetJs.getSunrise(lat, lon); break
+    case 'sunset': eventTime = sunriseSunsetJs.getSunset(lat, lon); break
+    default: res.send({ message: `Invalid type '${req.query.type}', must be 'sunrise' or 'sunset'` }); return
+  }
+
+  if (eventTime >= new Date(now - (minutesInterval * 60000)) && eventTime < now) {
+    udpRequest({ query: { command: req.query.command } }, { send: () => {} })
+    res.send({ message: 'Inside event time period', eventTime, now })
+    return;
+  }
+  res.send({ message: 'Outside event time period', eventTime, now })
 })
 
 app.listen(port, () => console.log(`dg7 API listening at http://localhost:${port}`))
