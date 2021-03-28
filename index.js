@@ -100,29 +100,35 @@ app.post('/tcp', (req, res) => {
   // })
 })
 
-app.post('/sunrise_sunset_event', (req, res) => {
-  for (const key of ['interval', 'type', 'lat', 'lon', 'command']) {
+app.post('/event', (req, res) => {
+  for (const key of ['interval', 'time', 'lat', 'lon', 'command']) {
     if (!Object.keys(req.query).includes(key)) {
+      if ((key === 'lat' || key === 'lon') && !['sunrise', 'sunset'].includes(req.query.time)) {
+        continue
+      }
       res.send({ message: `Missing query param '${key}'` })
       return
     }
   }
-  const minutesInterval = parseInt(req.query.interval, 10)
-  const lat = parseFloat(req.query.lat)
-  const lon = parseFloat(req.query.lon)
-  const now = new Date()
-  let eventTime;
-  switch (req.query.type) {
-    case 'sunrise': eventTime = sunriseSunsetJs.getSunrise(lat, lon); break
-    case 'sunset': eventTime = sunriseSunsetJs.getSunset(lat, lon); break
-    default: res.send({ message: `Invalid type '${req.query.type}', must be 'sunrise' or 'sunset'` }); return
+
+  let eventTime
+  switch (req.query.time) {
+    case 'sunrise': eventTime = sunriseSunsetJs.getSunrise(parseFloat(req.query.lat), parseFloat(req.query.lon)); break
+    case 'sunset': eventTime = sunriseSunsetJs.getSunset(parseFloat(req.query.lat), parseFloat(req.query.lon)); break
+    default:
+      const timeTokens = req.query.time.split(':')
+      eventTime = new Date()
+      eventTime.setHours(timeTokens[0], timeTokens[1] || 0, timeTokens[2] || 0, 0)
   }
 
+  const now = new Date()
+  const minutesInterval = parseInt(req.query.interval, 10)
   if (eventTime >= new Date(now - (minutesInterval * 60000)) && eventTime < now) {
     udpRequest({ query: { command: req.query.command } }, { send: () => {} })
     res.send({ message: 'Inside event time period', eventTime, now })
-    return;
+    return
   }
+
   res.send({ message: 'Outside event time period', eventTime, now })
 })
 
