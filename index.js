@@ -120,6 +120,9 @@ app.post('/event', (req, res) => {
       eventTime = new Date()
       eventTime.setHours(timeTokens[0], timeTokens[1] || 0, timeTokens[2] || 0, 0)
   }
+  if (req.query.offset) {
+    eventTime = new Date(eventTime.getTime() + (parseInt(req.query.offset, 10) * 60000))
+  }
 
   const now = new Date()
   const minutesInterval = parseInt(req.query.interval, 10)
